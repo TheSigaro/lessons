@@ -1,19 +1,39 @@
 import time
+import sys
+from functools import wraps
 
+class TraceCalls(object):
+    """ Use as a decorator on functions that should be traced. Several
+        functions can be decorated - they will all be indented according
+        to their call depth.
+    """
+    def __init__(self, stream=sys.stdout, indent_step=2, show_ret=False):
+        self.stream = stream
+        self.indent_step = indent_step
+        self.show_ret = show_ret
 
-def timeit(method):
-    def timed(*args, **kw):
-        ts = time.time()
-        result = method(*args, **kw)
-        te = time.time()
-        if 'log_time' in kw:
-            name = kw.get('log_name', method.__name__.upper())
-            kw['log_time'][name] = int((te - ts) * 1000)
-        else:
-            print ('%r  %2.2f ms' % \
-                  (method.__name__, (te - ts) * 1000))
-        return result
-    return timed
+        # This is a class attribute since we want to share the indentation
+        # level between different traced functions, in case they call
+        # each other.
+        TraceCalls.cur_indent = 0
+
+    def __call__(self, fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            indent = ' ' * TraceCalls.cur_indent
+            argstr = ', '.join(
+                [repr(a) for a in args] +
+                ["%s=%s" % (a, repr(b)) for a, b in kwargs.items()])
+            self.stream.write('%s%s(%s)\n' % (indent, fn.__name__, argstr))
+
+            TraceCalls.cur_indent += self.indent_step
+            ret = fn(*args, **kwargs)
+            TraceCalls.cur_indent -= self.indent_step
+
+            if self.show_ret:
+                self.stream.write('%s--> %s\n' % (indent, ret))
+            return ret
+        return wrapper
 
 
 def input_array():
@@ -26,7 +46,7 @@ def input_array():
     return num_array
 
 
-@timeit
+@TraceCalls()
 def match(*args, simple=False, even=False, odd=False):
     arr = args
     if simple:
@@ -62,14 +82,15 @@ def count_values(counter, *args, step=2, as_list=False):
 def main():
     print("Hello main!")
     arr = input_array()
-    print('With v')
-    res = count_values(power, *arr, step=3)
-    print(res)
-    print('Without v')
-    res = count_values(power, *arr, step=3, as_list=True)
-    print(res)
-    print('Match')
+    # print('With v')
+    # res = count_values(power, *arr, step=3)
+    # print(res)
+    # print('Without v')
+    # res = count_values(power, *arr, step=3, as_list=True)
+    # print(res)
+    # print('Match')
     match(*arr, simple=True)
 
 
-main()
+if __name__ == "__main__":
+    main()
